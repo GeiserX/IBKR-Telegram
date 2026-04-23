@@ -1,0 +1,14 @@
+.venv
+.git
+.omc
+.pytest_cache
+__pycache__
+*.pyc
+data/
+.env
+config.yaml
+tests/
+*.db
+*.db-wal
+*.db-shm
+.DS_Store

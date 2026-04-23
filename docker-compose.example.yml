@@ -1,0 +1,47 @@
+services:
+  ib-gateway:
+    image: ghcr.io/gnzsnz/ib-gateway:stable
+    container_name: ib-gateway
+    restart: unless-stopped
+    environment:
+      TWS_USERID: ${IBKR_USER_1}
+      TWS_PASSWORD: ${IBKR_PASS_1}
+      TRADING_MODE: ${IBKR_MODE_1:-paper}
+      TWOFA_TIMEOUT_ACTION: restart
+      RELOGIN_AFTER_TWOFA_TIMEOUT: "yes"
+      EXISTING_SESSION_DETECTED_ACTION: primaryoverride
+      TWS_SETTINGS_PATH: /home/ibgateway/tws_settings
+      SAVE_TWS_SETTINGS: "yes"
+      READ_ONLY_API: "no"
+    volumes:
+      - ./tws_settings:/home/ibgateway/tws_settings
+    networks:
+      - trading
+
+  ibkr-telegram:
+    image: drumsergio/ibkr-telegram:0.1.0
+    container_name: ibkr-telegram
+    restart: unless-stopped
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ADMIN_CHAT_ID: ${TELEGRAM_ADMIN_CHAT_ID}
+      CONFIG_PATH: /app/config.yaml
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - ib-gateway
+    networks:
+      - trading
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  trading:
+    driver: bridge

@@ -1,0 +1,16 @@
+accounts:
+  - name: main
+    gateway_host: ib-gateway
+    gateway_port: 4003
+    max_allocation_pct: 100
+    max_position_pct: 15
+    margin_mode: soft  # "soft" (sizing target + alerts), "hard" (auto-sell), "off"
+    # max_margin_usd: 1000  # Optional cap (0 = no limit, sizes to ~0% cash)
+
+trading:
+  max_deviation_pct: 3
+  order_type: LMT
+  limit_offset_pct: 0.5
+  confirm_before_execute: true
+  asset_types:
+    - options
