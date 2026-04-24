@@ -460,7 +460,8 @@ class Database:
         net_deposits: float = 0,
     ) -> None:
         """Record a daily NLV snapshot (one per account per day)."""
-        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        now = datetime.now(UTC)
+        today = now.strftime("%Y-%m-%d")
         await self._db.execute(
             """INSERT INTO nlv_history
                (account_name, date, nlv_eur, nlv_usd, net_deposits, created_at)
@@ -471,7 +472,7 @@ class Database:
                    net_deposits = excluded.net_deposits,
                    created_at = excluded.created_at""",
             (account_name, today, nlv_eur, nlv_usd, net_deposits,
-             datetime.now(UTC).isoformat()),
+             now.isoformat()),
         )
         await self._db.commit()
 
