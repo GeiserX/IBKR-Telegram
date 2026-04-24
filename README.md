@@ -4,11 +4,15 @@
 
 # IBKR-Telegram
 
-[![CI](https://github.com/GeiserX/IBKR-Telegram/actions/workflows/ci.yml/badge.svg)](https://github.com/GeiserX/IBKR-Telegram/actions/workflows/ci.yml)
-[![Tests](https://github.com/GeiserX/IBKR-Telegram/actions/workflows/tests.yml/badge.svg)](https://github.com/GeiserX/IBKR-Telegram/actions/workflows/tests.yml)
-[![Docker](https://img.shields.io/docker/v/drumsergio/ibkr-telegram?label=Docker&sort=semver)](https://hub.docker.com/r/drumsergio/ibkr-telegram)
-[![License: GPL-3.0](https://img.shields.io/github/license/GeiserX/IBKR-Telegram)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/GeiserX/IBKR-Telegram)](https://github.com/GeiserX/IBKR-Telegram/stargazers)
+[![CI](https://img.shields.io/github/actions/workflow/status/GeiserX/IBKR-Telegram/ci.yml?style=flat-square&logo=github&label=CI)](https://github.com/GeiserX/IBKR-Telegram/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/GeiserX/IBKR-Telegram/tests.yml?style=flat-square&logo=pytest&logoColor=white&label=Tests)](https://github.com/GeiserX/IBKR-Telegram/actions/workflows/tests.yml)
+[![Docker](https://img.shields.io/docker/v/drumsergio/ibkr-telegram?style=flat-square&logo=docker&logoColor=white&label=Docker&sort=semver)](https://hub.docker.com/r/drumsergio/ibkr-telegram)
+[![Docker Pulls](https://img.shields.io/docker/pulls/drumsergio/ibkr-telegram?style=flat-square&logo=docker&logoColor=white)](https://hub.docker.com/r/drumsergio/ibkr-telegram)
+[![Docker Image Size](https://img.shields.io/docker/image-size/drumsergio/ibkr-telegram?style=flat-square&logo=docker&logoColor=white&sort=semver)](https://hub.docker.com/r/drumsergio/ibkr-telegram)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org)
+[![License: GPL-3.0](https://img.shields.io/github/license/GeiserX/IBKR-Telegram?style=flat-square&logo=gnu&logoColor=white)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/GeiserX/IBKR-Telegram?style=flat-square&logo=github)](https://github.com/GeiserX/IBKR-Telegram/stargazers)
+[![GitHub last commit](https://img.shields.io/github/last-commit/GeiserX/IBKR-Telegram?style=flat-square&logo=github)](https://github.com/GeiserX/IBKR-Telegram/commits/main)
 
 Self-hosted Telegram bot for Interactive Brokers. Manage your portfolio, execute trades, and monitor positions — all from Telegram.
 
