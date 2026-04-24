@@ -233,7 +233,10 @@ async def test_weight_zero_is_valid(client, received_signals):
 
 
 @pytest.mark.asyncio
-async def test_valid_signal(client, received_signals):
+async def test_valid_signal(client, received_signals, webhook):
+    assert webhook.total_processed == 0
+    assert webhook.last_signal_at is None
+
     resp = await client.post(
         "/api/v1/signal",
         json={
@@ -256,6 +259,9 @@ async def test_valid_signal(client, received_signals):
     assert sig.action == "BUY"
     assert sig.target_weight_pct == 5.0
     assert sig.source == "test"
+
+    assert webhook.total_processed == 1
+    assert webhook.last_signal_at is not None
 
 
 @pytest.mark.asyncio

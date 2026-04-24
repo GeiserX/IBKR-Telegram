@@ -571,6 +571,43 @@ class TestOnHealthRequested:
         result = await app._on_health_requested()
         assert "System Health" in result
 
+    @pytest.mark.asyncio
+    async def test_webhook_listening_no_signals(self):
+        app = _build_app()
+        app.executor.connectors = {}
+        app.webhook.last_signal_at = None
+        app.webhook.total_processed = 0
+
+        result = await app._on_health_requested()
+        assert "Webhook: listening (no signals yet)" in result
+
+    @pytest.mark.asyncio
+    async def test_webhook_disabled(self):
+        app = _build_app()
+        app.executor.connectors = {}
+        app.webhook = None
+
+        result = await app._on_health_requested()
+        assert "Webhook: disabled" in result
+
+    @pytest.mark.asyncio
+    async def test_web_url_shown(self):
+        cfg = _make_config(web_url="https://dash.example.com")
+        app = _build_app(config=cfg)
+        app.executor.connectors = {}
+
+        result = await app._on_health_requested()
+        assert "https://dash.example.com" in result
+        assert "Web Dashboard" in result
+
+    @pytest.mark.asyncio
+    async def test_web_url_hidden_when_empty(self):
+        app = _build_app()
+        app.executor.connectors = {}
+
+        result = await app._on_health_requested()
+        assert "Web Dashboard" not in result
+
 
 # ── _on_gateway_status() ────────────────────────────────────────────────────
 

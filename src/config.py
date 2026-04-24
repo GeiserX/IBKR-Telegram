@@ -12,7 +12,10 @@ def _int_env(name: str, fallback: int = 0) -> int:
     val = os.getenv(name, "")
     if not val:
         return fallback
-    return int(val)
+    try:
+        return int(val)
+    except ValueError:
+        raise ValueError(f"Environment variable {name} must be an integer, got: {val!r}")
 
 
 @dataclass
@@ -25,16 +28,16 @@ class AccountConfig:
     margin_mode: str = "off"  # "soft" (sizing target), "hard" (auto-sell enforcement), "off"
     max_margin_usd: float = 0.0  # Margin cap in USD (0 = no limit, sizes to ~0% cash)
     is_margin_account: bool = False  # Auto-detected from IBKR on connect
+    display_name: str = ""
+    net_deposits: float = 0.0
+    flex_token: str = ""
+    flex_query_id: int = 0
 
     def __post_init__(self):
         # YAML parses bare `off` as False, `on` as True — normalize to string
         if isinstance(self.margin_mode, bool):
             self.margin_mode = "off" if not self.margin_mode else "soft"
         self.margin_mode = str(self.margin_mode).lower()
-    display_name: str = ""
-    net_deposits: float = 0.0
-    flex_token: str = ""
-    flex_query_id: int = 0
 
 
 @dataclass
@@ -64,6 +67,9 @@ class Config:
     # Webhook API (optional — for receiving signals from external sources)
     webhook_secret: str = ""
     webhook_port: int = 8080
+
+    # Optional URL shown in /status (e.g. link to a web dashboard)
+    web_url: str = ""
 
     def validate(self) -> list[str]:
         """Validate essential config fields. Returns list of errors."""
@@ -122,7 +128,10 @@ def load_config() -> Config:
         cap_key = f"MAX_MARGIN_{acc.name.upper()}"
         cap_val = os.getenv(cap_key, "")
         if cap_val:
-            acc.max_margin_usd = float(cap_val)
+            try:
+                acc.max_margin_usd = float(cap_val)
+            except ValueError:
+                raise ValueError(f"Environment variable {cap_key} must be a number, got: {cap_val!r}")
 
     # Env vars override YAML
     return Config(
@@ -132,4 +141,5 @@ def load_config() -> Config:
         trading=TradingConfig(**trading_data) if trading_data else TradingConfig(),
         webhook_secret=os.getenv("WEBHOOK_SECRET", data.get("webhook_secret", "")),
         webhook_port=_int_env("WEBHOOK_PORT", data.get("webhook_port", 8080)),
+        web_url=os.getenv("WEB_URL", data.get("web_url", "")),
     )

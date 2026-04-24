@@ -173,8 +173,8 @@ class TestGetPendingCount:
         import src.bot as bot_mod
 
         signal = TradeSignal(ticker="AAPL", action="BUY")
-        bot_mod._pending["key1"] = (1, signal)
-        bot_mod._pending["key2"] = (2, signal)
+        bot_mod._pending["key1"] = {"signal_id": 1, "signal": signal, "_created_at": 0}
+        bot_mod._pending["key2"] = {"signal_id": 2, "signal": signal, "_created_at": 0}
         assert bot_instance.get_pending_count() == 2
 
 
@@ -222,9 +222,10 @@ class TestSendConfirmation:
         key = list(bot_mod._pending.keys())[0]
         assert "TSLA" in key
         assert "SELL" in key
-        stored_id, stored_signal = bot_mod._pending[key]
-        assert stored_id == 7
-        assert stored_signal is signal
+        stored = bot_mod._pending[key]
+        assert stored["signal_id"] == 7
+        assert stored["signal"] is signal
+        assert "_created_at" in stored
 
     async def test_no_optional_fields(self, bot_instance):
         """Signal without optional fields still sends."""
@@ -625,7 +626,7 @@ class TestCmdPending:
         import src.bot as bot_mod
 
         signal = TradeSignal(ticker="AAPL", action="BUY")
-        bot_mod._pending["key1"] = (1, signal)
+        bot_mod._pending["key1"] = {"signal_id": 1, "signal": signal, "_created_at": 0}
         msg = _make_message(text="/pending")
         await cmd_pending(msg)
         text = msg.answer.call_args[0][0]
@@ -1007,7 +1008,7 @@ class TestOnExecute:
         import src.bot as bot_mod
 
         signal = TradeSignal(ticker="AAPL", action="BUY")
-        bot_mod._pending["key1"] = (42, signal)
+        bot_mod._pending["key1"] = {"signal_id": 42, "signal": signal, "_created_at": 0}
 
         result = MagicMock()
         result.success = True
@@ -1031,7 +1032,7 @@ class TestOnExecute:
         import src.bot as bot_mod
 
         signal = TradeSignal(ticker="AAPL", action="BUY")
-        bot_mod._pending["key1"] = (1, signal)
+        bot_mod._pending["key1"] = {"signal_id": 1, "signal": signal, "_created_at": 0}
         bot_mod._on_confirm = AsyncMock(side_effect=RuntimeError("execution failed"))
 
         cb = _make_callback(data="exec:key1")
@@ -1044,7 +1045,7 @@ class TestOnExecute:
         import src.bot as bot_mod
 
         signal = TradeSignal(ticker="AAPL", action="BUY")
-        bot_mod._pending["key1"] = (1, signal)
+        bot_mod._pending["key1"] = {"signal_id": 1, "signal": signal, "_created_at": 0}
 
         cb = _make_callback(data="exec:key1")
         await on_execute(cb)
@@ -1062,7 +1063,7 @@ class TestOnExecute:
         import src.bot as bot_mod
 
         signal = TradeSignal(ticker="AAPL", action="BUY")
-        bot_mod._pending["key1"] = (1, signal)
+        bot_mod._pending["key1"] = {"signal_id": 1, "signal": signal, "_created_at": 0}
 
         cb1 = _make_callback(data="exec:key1")
         await on_execute(cb1)
@@ -1078,7 +1079,7 @@ class TestOnSkip:
         import src.bot as bot_mod
 
         signal = TradeSignal(ticker="AAPL", action="BUY")
-        bot_mod._pending["key1"] = (1, signal)
+        bot_mod._pending["key1"] = {"signal_id": 1, "signal": signal, "_created_at": 0}
 
         cb = _make_callback(data="skip:key1")
         await on_skip(cb)
