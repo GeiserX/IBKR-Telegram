@@ -73,7 +73,7 @@ class WebhookServer:
                 )
 
         message_id = data.get("message_id")
-        if message_id is not None and not isinstance(message_id, int):
+        if message_id is not None and (isinstance(message_id, bool) or not isinstance(message_id, int)):
             return web.json_response(
                 {"error": "message_id must be an integer"}, status=400,
             )
@@ -106,7 +106,10 @@ class WebhookServer:
             return web.json_response(
                 {"error": "internal processing error"}, status=500,
             )
-        return web.json_response(result, status=202)
+
+        # Duplicates return 200 (idempotent), new signals return 202 (accepted)
+        status = 200 if result.get("status") == "duplicate_skipped" else 202
+        return web.json_response(result, status=status)
 
     async def _handle_health(self, request: web.Request) -> web.Response:
         return web.json_response({"status": "ok"})

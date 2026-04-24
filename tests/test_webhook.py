@@ -165,6 +165,19 @@ async def test_invalid_message_id_type(client):
 
 
 @pytest.mark.asyncio
+async def test_invalid_message_id_bool(client):
+    """Booleans are not valid for message_id even though bool is a subclass of int."""
+    resp = await client.post(
+        "/api/v1/signal",
+        json={"ticker": "AAPL", "action": "BUY", "message_id": True},
+        headers={"Authorization": "Bearer test-secret"},
+    )
+    assert resp.status == 400
+    data = await resp.json()
+    assert "message_id" in data["error"]
+
+
+@pytest.mark.asyncio
 async def test_invalid_related_ticker_type(client):
     """related_ticker must be a string, not a number."""
     resp = await client.post(

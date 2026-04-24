@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import math
+import signal
 import ssl
 import urllib.request
 from collections import defaultdict
@@ -108,9 +109,14 @@ class App:
                 logger.info("Running webhook API only (no bot token or accounts configured)")
                 # Keep alive — webhook server runs in its own aiohttp runner
                 stop_event = asyncio.Event()
+                loop = asyncio.get_running_loop()
+                for sig in (signal.SIGTERM, signal.SIGINT):
+                    loop.add_signal_handler(sig, stop_event.set)
                 try:
                     await stop_event.wait()
                 finally:
+                    for sig in (signal.SIGTERM, signal.SIGINT):
+                        loop.remove_signal_handler(sig)
                     await self.shutdown()
                 return
             else:
