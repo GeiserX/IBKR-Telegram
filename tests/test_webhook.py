@@ -3,6 +3,7 @@
 import unittest.mock
 
 import pytest
+from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 from src.models import TradeSignal
@@ -335,45 +336,44 @@ async def test_callback_timeout_returns_504():
         with unittest.mock.patch("src.webhook.asyncio.wait_for", side_effect=fast_wait_for):
             return await original_handle(request)
 
-    server_obj._app.router._resources = []
-    server_obj._app.router.add_post("/api/v1/signal", patched_handle)
-    server_obj._app.router.add_get("/health", server_obj._handle_health)
+    app = web.Application()
+    app.router.add_post("/api/v1/signal", patched_handle)
+    app.router.add_get("/health", server_obj._handle_health)
 
-    test_server = TestServer(server_obj._app)
+    test_server = TestServer(app)
     test_client = TestClient(test_server)
     await test_client.start_server()
-
-    resp = await test_client.post(
-        "/api/v1/signal",
-        json={"ticker": "AAPL", "action": "BUY"},
-        headers={"Authorization": "Bearer test-secret"},
-    )
-    assert resp.status == 504
-    data = await resp.json()
-    assert data["error"] == "processing timeout"
-
-    await test_client.close()
+    try:
+        resp = await test_client.post(
+            "/api/v1/signal",
+            json={"ticker": "AAPL", "action": "BUY"},
+            headers={"Authorization": "Bearer test-secret"},
+        )
+        assert resp.status == 504
+        data = await resp.json()
+        assert data["error"] == "processing timeout"
+    finally:
+        await test_client.close()
 
 
 @pytest.mark.asyncio
-async def test_duplicate_signal_returns_200(client, received_signals):
+async def test_duplicate_signal_returns_200():
     """When on_signal returns duplicate_skipped status, HTTP status is 200."""
     async def dup_callback(signal: TradeSignal) -> dict:
         return {"status": "duplicate_skipped", "ticker": signal.ticker, "action": signal.action}
 
-    # Create a separate server with the dup callback
     server_obj = WebhookServer(secret="test-secret", port=0, on_signal=dup_callback)
     test_server = TestServer(server_obj._app)
     dup_client = TestClient(test_server)
     await dup_client.start_server()
-
-    resp = await dup_client.post(
-        "/api/v1/signal",
-        json={"ticker": "AAPL", "action": "BUY"},
-        headers={"Authorization": "Bearer test-secret"},
-    )
-    assert resp.status == 200
-    data = await resp.json()
-    assert data["status"] == "duplicate_skipped"
-
-    await dup_client.close()
+    try:
+        resp = await dup_client.post(
+            "/api/v1/signal",
+            json={"ticker": "AAPL", "action": "BUY"},
+            headers={"Authorization": "Bearer test-secret"},
+        )
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "duplicate_skipped"
+    finally:
+        await dup_client.close()

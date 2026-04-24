@@ -173,11 +173,8 @@ class TestConnect:
             ],
             managed=["U12345"],
         )
-        with patch("src.executor.IB", return_value=mock_ib) if False else \
-             patch.object(c, "_ib", None):
-            # Patch at the module import level inside connect()
-            with patch("ib_async.IB", return_value=mock_ib):
-                await c.connect()
+        with patch.object(c, "_ib", None), patch("ib_async.IB", return_value=mock_ib):
+            await c.connect()
         assert acct.is_margin_account is True
 
     @pytest.mark.asyncio
@@ -902,6 +899,12 @@ class TestPlaceOrder:
         assert len(handlers_added) == 1
 
 
+def _close_coro_side_effect(coro):
+    """Close a coroutine to avoid RuntimeWarning about unawaited coroutines."""
+    coro.close()
+    return MagicMock()
+
+
 class TestHandleStatus:
     """Tests for IBKRConnector._handle_status()."""
 
@@ -951,18 +954,15 @@ class TestHandleStatus:
         async def on_fill(acct, info):
             pass
         c = IBKRConnector(_make_account(), on_fill=on_fill)
-        with patch("src.executor.asyncio.ensure_future") as mock_ef:
+        with patch("src.executor.asyncio.ensure_future", side_effect=_close_coro_side_effect) as mock_ef:
             c._handle_status(self._make_trade("Submitted"))
             mock_ef.assert_called_once()
-            coro = mock_ef.call_args[0][0]
-            # Verify the coroutine was created with correct info
-            assert coro is not None
 
     def test_filled_event(self):
         async def on_fill(acct, info):
             pass
         c = IBKRConnector(_make_account(), on_fill=on_fill)
-        with patch("src.executor.asyncio.ensure_future") as mock_ef:
+        with patch("src.executor.asyncio.ensure_future", side_effect=_close_coro_side_effect) as mock_ef:
             c._handle_status(self._make_trade("Filled", filled=5, remaining=0))
             mock_ef.assert_called_once()
 
@@ -970,7 +970,7 @@ class TestHandleStatus:
         async def on_fill(acct, info):
             pass
         c = IBKRConnector(_make_account(), on_fill=on_fill)
-        with patch("src.executor.asyncio.ensure_future") as mock_ef:
+        with patch("src.executor.asyncio.ensure_future", side_effect=_close_coro_side_effect) as mock_ef:
             c._handle_status(self._make_trade("Cancelled"))
             mock_ef.assert_called_once()
 
@@ -978,7 +978,7 @@ class TestHandleStatus:
         async def on_fill(acct, info):
             pass
         c = IBKRConnector(_make_account(), on_fill=on_fill)
-        with patch("src.executor.asyncio.ensure_future") as mock_ef:
+        with patch("src.executor.asyncio.ensure_future", side_effect=_close_coro_side_effect) as mock_ef:
             c._handle_status(self._make_trade("ApiCancelled"))
             mock_ef.assert_called_once()
 
@@ -986,7 +986,7 @@ class TestHandleStatus:
         async def on_fill(acct, info):
             pass
         c = IBKRConnector(_make_account(), on_fill=on_fill)
-        with patch("src.executor.asyncio.ensure_future") as mock_ef:
+        with patch("src.executor.asyncio.ensure_future", side_effect=_close_coro_side_effect) as mock_ef:
             c._handle_status(self._make_trade("Inactive", log_msg="Order rejected by exchange"))
             mock_ef.assert_called_once()
 
@@ -1026,13 +1026,7 @@ class TestHandleStatusDispatchContent:
             trade.log = []
 
         with patch.object(c, "_safe_dispatch", new_callable=AsyncMock):
-            with patch("src.executor.asyncio.ensure_future") as mock_ef:
-                # Replace ensure_future to just call the coro synchronously
-                def run_coro(coro):
-                    # We patched _safe_dispatch, so the coro won't actually run
-                    # but we captured the call via the mock
-                    pass
-                mock_ef.side_effect = run_coro
+            with patch("src.executor.asyncio.ensure_future", side_effect=_close_coro_side_effect):
                 c._handle_status(trade)
 
         # _safe_dispatch is called indirectly via ensure_future wrapping it.
@@ -1086,7 +1080,7 @@ class TestHandleStatusDispatchContent:
         entry.message = "Margin requirements not met"
         trade.log = [entry]
 
-        with patch("src.executor.asyncio.ensure_future"):
+        with patch("src.executor.asyncio.ensure_future", side_effect=_close_coro_side_effect):
             c._handle_status(trade)
         # No exception means success; Inactive path with log was exercised
 

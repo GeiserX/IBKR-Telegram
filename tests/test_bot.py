@@ -265,7 +265,7 @@ class TestIsAdmin:
         import src.bot as bot_mod
 
         bot_mod._admin_chat_id = 0
-        assert _is_admin(0) is True  # edge case: both are 0
+        assert _is_admin(0) is False  # 0 means unconfigured
         assert _is_admin(1) is False
 
 

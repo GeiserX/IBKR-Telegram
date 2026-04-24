@@ -141,7 +141,7 @@ curl -X POST http://localhost:8080/api/v1/signal \
 
 ## IB Gateway
 
-This project uses the [gnzsnz/ib-gateway](https://github.com/gnzsnz/ib-gateway) Docker image. Key settings:
+This project uses the [gnzsnz/ib-gateway-docker](https://github.com/gnzsnz/ib-gateway-docker) Docker image. Key settings:
 
 - **2FA**: Required once per week (Sunday). The container auto-restarts and relogins after timeout.
 - **Session persistence**: `SAVE_TWS_SETTINGS=yes` preserves settings across restarts.

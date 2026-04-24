@@ -303,7 +303,8 @@ class TestGetLastSyncTime:
         await db.upsert_account_summary("A2", nlv=20000)
         result = await db.get_last_sync_time()
         assert result is not None
-        assert "T" in result  # ISO format
+        from datetime import datetime
+        datetime.fromisoformat(result)  # validates ISO-8601 format
 
 
 # ===========================================================================
