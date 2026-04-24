@@ -27,6 +27,8 @@ class WebhookServer:
         self._app.router.add_post("/api/v1/signal", self._handle_signal)
         self._app.router.add_get("/health", self._handle_health)
         self._runner: web.AppRunner | None = None
+        self.last_signal_at: datetime | None = None
+        self.total_signals: int = 0
 
     async def start(self) -> None:
         self._runner = web.AppRunner(self._app)
@@ -106,6 +108,9 @@ class WebhookServer:
             return web.json_response(
                 {"error": "internal processing error"}, status=500,
             )
+
+        self.last_signal_at = datetime.now(UTC)
+        self.total_signals += 1
 
         # Duplicates return 200 (idempotent), new signals return 202 (accepted)
         status = 200 if result.get("status") == "duplicate_skipped" else 202

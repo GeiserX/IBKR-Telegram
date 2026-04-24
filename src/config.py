@@ -65,6 +65,9 @@ class Config:
     webhook_secret: str = ""
     webhook_port: int = 8080
 
+    # Optional URL shown in /status (e.g. link to a web dashboard)
+    web_url: str = ""
+
     def validate(self) -> list[str]:
         """Validate essential config fields. Returns list of errors."""
         errors = []
@@ -132,4 +135,5 @@ def load_config() -> Config:
         trading=TradingConfig(**trading_data) if trading_data else TradingConfig(),
         webhook_secret=os.getenv("WEBHOOK_SECRET", data.get("webhook_secret", "")),
         webhook_port=_int_env("WEBHOOK_PORT", data.get("webhook_port", 8080)),
+        web_url=os.getenv("WEB_URL", data.get("web_url", "")),
     )
