@@ -2,16 +2,18 @@
   <img src="banners/banner.svg" alt="IBKR-Telegram" width="100%">
 </p>
 
-# IBKR-Telegram
+<h1 align="center">IBKR-Telegram</h1>
 
-[![CI](https://img.shields.io/github/actions/workflow/status/GeiserX/IBKR-Telegram/ci.yml?style=flat-square&logo=github&label=CI)](https://github.com/GeiserX/IBKR-Telegram/actions/workflows/ci.yml)
-[![Codecov](https://img.shields.io/codecov/c/github/GeiserX/IBKR-Telegram?style=flat-square&logo=codecov&logoColor=white)](https://app.codecov.io/gh/GeiserX/IBKR-Telegram)
-[![Docker](https://img.shields.io/docker/v/drumsergio/ibkr-telegram?style=flat-square&logo=docker&logoColor=white&label=Docker&sort=semver)](https://hub.docker.com/r/drumsergio/ibkr-telegram)
-[![Docker Pulls](https://img.shields.io/docker/pulls/drumsergio/ibkr-telegram?style=flat-square&logo=docker&logoColor=white)](https://hub.docker.com/r/drumsergio/ibkr-telegram)
-[![Docker Image Size](https://img.shields.io/docker/image-size/drumsergio/ibkr-telegram?style=flat-square&logo=docker&logoColor=white&sort=semver)](https://hub.docker.com/r/drumsergio/ibkr-telegram)
-[![Python](https://img.shields.io/badge/Python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org)
+<p align="center">
+  <a href="https://github.com/GeiserX/IBKR-Telegram/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/GeiserX/IBKR-Telegram/ci.yml?style=flat-square&logo=github&label=CI" alt="CI"></a>
+  <a href="https://app.codecov.io/gh/GeiserX/IBKR-Telegram"><img src="https://img.shields.io/codecov/c/github/GeiserX/IBKR-Telegram?style=flat-square&logo=codecov&logoColor=white" alt="Codecov"></a>
+  <a href="https://hub.docker.com/r/drumsergio/ibkr-telegram"><img src="https://img.shields.io/docker/v/drumsergio/ibkr-telegram?style=flat-square&logo=docker&logoColor=white&label=Docker&sort=semver" alt="Docker"></a>
+  <a href="https://hub.docker.com/r/drumsergio/ibkr-telegram"><img src="https://img.shields.io/docker/pulls/drumsergio/ibkr-telegram?style=flat-square&logo=docker&logoColor=white" alt="Docker Pulls"></a>
+  <a href="https://hub.docker.com/r/drumsergio/ibkr-telegram"><img src="https://img.shields.io/docker/image-size/drumsergio/ibkr-telegram?style=flat-square&logo=docker&logoColor=white&sort=semver" alt="Docker Image Size"></a>
+  <a href="https://www.python.org"><img src="https://img.shields.io/badge/Python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
+</p>
 
-Self-hosted Telegram bot for Interactive Brokers. Manage your portfolio, execute trades, and monitor positions — all from Telegram.
+<p align="center">Self-hosted Telegram bot for Interactive Brokers. Manage your portfolio, execute trades, and monitor positions — all from Telegram.</p>
 
 ## Disclaimer
 
