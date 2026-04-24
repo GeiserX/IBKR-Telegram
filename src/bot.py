@@ -248,6 +248,8 @@ class ConfirmationBot:
 
 def _is_admin(user_id: int) -> bool:
     """Check if the user is the authorized admin."""
+    if _admin_chat_id == 0:
+        return False
     return user_id == _admin_chat_id
 
 

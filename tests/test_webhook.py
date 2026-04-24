@@ -1,6 +1,9 @@
 """Tests for the webhook API server."""
 
+import unittest.mock
+
 import pytest
+from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 from src.models import TradeSignal
@@ -285,3 +288,92 @@ async def test_empty_secret_raises_value_error():
 
     with pytest.raises(ValueError, match="non-empty secret"):
         WebhookServer(secret="", port=0, on_signal=on_signal)
+
+
+@pytest.mark.asyncio
+async def test_start_and_stop():
+    """WebhookServer can start and stop without error."""
+    async def on_signal(signal: TradeSignal) -> dict:
+        return {"signal_id": 1, "status": "pending_confirmation"}
+
+    server = WebhookServer(secret="test-secret", port=0, on_signal=on_signal)
+    await server.start()
+    assert server._runner is not None
+    await server.stop()
+
+
+@pytest.mark.asyncio
+async def test_stop_when_not_started():
+    """Stopping a server that was never started is a no-op."""
+    async def on_signal(signal: TradeSignal) -> dict:
+        return {"signal_id": 1, "status": "pending_confirmation"}
+
+    server = WebhookServer(secret="test-secret", port=0, on_signal=on_signal)
+    assert server._runner is None
+    await server.stop()  # Should not raise
+
+
+@pytest.mark.asyncio
+async def test_callback_timeout_returns_504():
+    """When on_signal takes too long, the webhook returns 504."""
+    import asyncio
+
+    async def slow_callback(signal: TradeSignal) -> dict:
+        await asyncio.sleep(60)
+        return {"signal_id": 1, "status": "pending_confirmation"}
+
+    server_obj = WebhookServer(secret="test-secret", port=0, on_signal=slow_callback)
+    # Monkey-patch a shorter timeout for the test
+    original_handle = server_obj._handle_signal
+
+    async def patched_handle(request):
+        # Replace the 30s timeout with 0.1s for testing
+        orig_wait_for = asyncio.wait_for
+
+        async def fast_wait_for(coro, timeout=None):
+            return await orig_wait_for(coro, timeout=0.1)
+
+        with unittest.mock.patch("src.webhook.asyncio.wait_for", side_effect=fast_wait_for):
+            return await original_handle(request)
+
+    app = web.Application()
+    app.router.add_post("/api/v1/signal", patched_handle)
+    app.router.add_get("/health", server_obj._handle_health)
+
+    test_server = TestServer(app)
+    test_client = TestClient(test_server)
+    await test_client.start_server()
+    try:
+        resp = await test_client.post(
+            "/api/v1/signal",
+            json={"ticker": "AAPL", "action": "BUY"},
+            headers={"Authorization": "Bearer test-secret"},
+        )
+        assert resp.status == 504
+        data = await resp.json()
+        assert data["error"] == "processing timeout"
+    finally:
+        await test_client.close()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_signal_returns_200():
+    """When on_signal returns duplicate_skipped status, HTTP status is 200."""
+    async def dup_callback(signal: TradeSignal) -> dict:
+        return {"status": "duplicate_skipped", "ticker": signal.ticker, "action": signal.action}
+
+    server_obj = WebhookServer(secret="test-secret", port=0, on_signal=dup_callback)
+    test_server = TestServer(server_obj._app)
+    dup_client = TestClient(test_server)
+    await dup_client.start_server()
+    try:
+        resp = await dup_client.post(
+            "/api/v1/signal",
+            json={"ticker": "AAPL", "action": "BUY"},
+            headers={"Authorization": "Bearer test-secret"},
+        )
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "duplicate_skipped"
+    finally:
+        await dup_client.close()

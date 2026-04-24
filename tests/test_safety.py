@@ -112,3 +112,78 @@ async def test_no_duplicate():
 @pytest.mark.asyncio
 async def test_duplicate_no_db():
     assert await check_duplicate_signal(None, "IREN", "BUY") is False
+
+
+# === time_until_market_open ===
+
+
+@patch("src.safety.datetime")
+def test_time_until_open_returns_none_when_open(mock_dt):
+    """When market is open, returns None."""
+    mock_dt.now.return_value = _mock_et_datetime(0, 10, 0)  # Monday 10:00
+    mock_dt.side_effect = lambda *a, **kw: mock_dt
+    from src.safety import time_until_market_open
+
+    result = time_until_market_open()
+    assert result is None
+
+
+@patch("src.safety.datetime")
+def test_time_until_open_after_close_same_day(mock_dt):
+    """After close on a weekday, returns time until next day open."""
+    mock_dt.now.return_value = _mock_et_datetime(0, 17, 0)  # Monday 17:00
+    mock_dt.side_effect = lambda *a, **kw: mock_dt
+    from src.safety import time_until_market_open
+
+    result = time_until_market_open()
+    assert result is not None
+    # Should be ~16.5 hours until Tuesday 09:30
+    assert result.total_seconds() > 0
+
+
+@patch("src.safety.datetime")
+def test_time_until_open_saturday(mock_dt):
+    """On Saturday, returns time until Monday open."""
+    mock_dt.now.return_value = _mock_et_datetime(5, 12, 0)  # Saturday 12:00
+    from src.safety import time_until_market_open
+
+    result = time_until_market_open()
+    assert result is not None
+    # Should be >1 day until Monday 09:30
+    assert result.total_seconds() > 86400
+
+
+@patch("src.safety.datetime")
+def test_time_until_open_sunday(mock_dt):
+    """On Sunday, returns time until Monday open."""
+    mock_dt.now.return_value = _mock_et_datetime(6, 8, 0)  # Sunday 08:00
+    from src.safety import time_until_market_open
+
+    result = time_until_market_open()
+    assert result is not None
+    assert result.total_seconds() > 0
+
+
+@patch("src.safety.datetime")
+def test_time_until_open_friday_after_close(mock_dt):
+    """After close on Friday, returns time until Monday open."""
+    mock_dt.now.return_value = _mock_et_datetime(4, 18, 0)  # Friday 18:00
+    from src.safety import time_until_market_open
+
+    result = time_until_market_open()
+    assert result is not None
+    # At least 2 days to skip weekend
+    assert result.total_seconds() > 2 * 86400
+
+
+@patch("src.safety.datetime")
+def test_time_until_open_before_open_same_day(mock_dt):
+    """Before market opens on a weekday."""
+    mock_dt.now.return_value = _mock_et_datetime(1, 7, 0)  # Tuesday 07:00
+    mock_dt.side_effect = lambda *a, **kw: mock_dt
+    from src.safety import time_until_market_open
+
+    result = time_until_market_open()
+    assert result is not None
+    # Should be 2.5 hours (7:00 → 9:30)
+    assert 8900 < result.total_seconds() < 9100
