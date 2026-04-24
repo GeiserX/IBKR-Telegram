@@ -701,6 +701,56 @@ class TestLogAudit:
 
 
 # ===========================================================================
+# snapshot_nlv
+# ===========================================================================
+
+
+class TestSnapshotNlv:
+    async def test_inserts_snapshot(self, db: Database):
+        await db.snapshot_nlv("U1", nlv_eur=50000, nlv_usd=55000, net_deposits=40000)
+        cursor = await db._db.execute(
+            "SELECT * FROM nlv_history WHERE account_name = 'U1'"
+        )
+        row = await cursor.fetchone()
+        assert row is not None
+        r = dict(row)
+        assert r["nlv_eur"] == 50000
+        assert r["nlv_usd"] == 55000
+        assert r["net_deposits"] == 40000
+        assert r["date"] == datetime.now(UTC).strftime("%Y-%m-%d")
+
+    async def test_upsert_same_day_updates(self, db: Database):
+        await db.snapshot_nlv("U1", nlv_eur=50000, nlv_usd=55000)
+        await db.snapshot_nlv("U1", nlv_eur=51000, nlv_usd=56000)
+        cursor = await db._db.execute(
+            "SELECT COUNT(*) FROM nlv_history WHERE account_name = 'U1'"
+        )
+        count = (await cursor.fetchone())[0]
+        assert count == 1
+        cursor = await db._db.execute(
+            "SELECT nlv_eur, nlv_usd FROM nlv_history WHERE account_name = 'U1'"
+        )
+        row = await cursor.fetchone()
+        assert row[0] == 51000
+        assert row[1] == 56000
+
+    async def test_different_accounts_separate_rows(self, db: Database):
+        await db.snapshot_nlv("U1", nlv_eur=50000, nlv_usd=55000)
+        await db.snapshot_nlv("U2", nlv_eur=20000, nlv_usd=22000)
+        cursor = await db._db.execute("SELECT COUNT(*) FROM nlv_history")
+        count = (await cursor.fetchone())[0]
+        assert count == 2
+
+    async def test_default_net_deposits_zero(self, db: Database):
+        await db.snapshot_nlv("U1", nlv_eur=10000, nlv_usd=11000)
+        cursor = await db._db.execute(
+            "SELECT net_deposits FROM nlv_history WHERE account_name = 'U1'"
+        )
+        row = await cursor.fetchone()
+        assert row[0] == 0
+
+
+# ===========================================================================
 # close
 # ===========================================================================
 
