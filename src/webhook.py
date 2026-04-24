@@ -18,6 +18,8 @@ class WebhookServer:
     """HTTP server that accepts trade signals via POST and exposes a health endpoint."""
 
     def __init__(self, secret: str, port: int, on_signal):
+        if not secret:
+            raise ValueError("WebhookServer requires a non-empty secret")
         self._secret = secret
         self._port = port
         self._on_signal = on_signal  # async callback(TradeSignal) -> dict
@@ -38,8 +40,6 @@ class WebhookServer:
             await self._runner.cleanup()
 
     def _check_auth(self, request: web.Request) -> bool:
-        if not self._secret:
-            return True
         auth = request.headers.get("Authorization", "")
         return hmac.compare_digest(auth, f"Bearer {self._secret}")
 
@@ -66,22 +66,34 @@ class WebhookServer:
 
         weight = data.get("target_weight_pct")
         if weight is not None:
-            if not isinstance(weight, (int, float)) or weight <= 0 or weight > 100:
+            if isinstance(weight, bool) or not isinstance(weight, (int, float)) or weight < 0 or weight > 100:
                 return web.json_response(
-                    {"error": "target_weight_pct must be between 0 and 100"},
+                    {"error": "target_weight_pct must be a number between 0 and 100"},
                     status=400,
                 )
+
+        message_id = data.get("message_id")
+        if message_id is not None and (isinstance(message_id, bool) or not isinstance(message_id, int)):
+            return web.json_response(
+                {"error": "message_id must be an integer"}, status=400,
+            )
+
+        related_ticker = data.get("related_ticker")
+        if related_ticker is not None and not isinstance(related_ticker, str):
+            return web.json_response(
+                {"error": "related_ticker must be a string"}, status=400,
+            )
 
         signal = TradeSignal(
             ticker=ticker,
             action=action,
             target_weight_pct=weight,
             amount_description=data.get("amount_description", ""),
-            related_ticker=data.get("related_ticker"),
+            related_ticker=related_ticker,
             raw_text=data.get("raw_text", ""),
             source=data.get("source", "webhook"),
             timestamp=datetime.now(UTC),
-            message_id=data.get("message_id"),
+            message_id=message_id,
         )
 
         try:
@@ -94,7 +106,10 @@ class WebhookServer:
             return web.json_response(
                 {"error": "internal processing error"}, status=500,
             )
-        return web.json_response(result, status=202)
+
+        # Duplicates return 200 (idempotent), new signals return 202 (accepted)
+        status = 200 if result.get("status") == "duplicate_skipped" else 202
+        return web.json_response(result, status=status)
 
     async def _handle_health(self, request: web.Request) -> web.Response:
         return web.json_response({"status": "ok"})
