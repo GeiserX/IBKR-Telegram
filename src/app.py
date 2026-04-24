@@ -1774,10 +1774,18 @@ class App:
                     net_deposits=account_cfg.net_deposits if account_cfg else 0,
                     display_name=account_cfg.display_name if account_cfg else "",
                 )
-                await self.db.snapshot_nlv(
-                    name, nlv_eur, nlv_usd,
-                    net_deposits=account_cfg.net_deposits if account_cfg else 0,
-                )
+                if (
+                    nlv_eur > 0 and nlv_usd > 0
+                    and not math.isnan(nlv_eur) and not math.isnan(nlv_usd)
+                ):
+                    await self.db.snapshot_nlv(
+                        name, nlv_eur, nlv_usd,
+                        net_deposits=account_cfg.net_deposits if account_cfg else 0,
+                    )
+                else:
+                    logger.warning(
+                        f"[{name}] Skipping NLV snapshot (EUR={nlv_eur}, USD={nlv_usd})"
+                    )
                 logger.info(
                     f"Synced {len(portfolio)} positions from {name} "
                     f"(NLV={base_currency} {nlv:,.0f}, EUR={nlv_eur:,.0f}, "
