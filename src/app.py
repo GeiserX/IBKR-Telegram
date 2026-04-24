@@ -1543,6 +1543,20 @@ class App:
         except Exception:
             pass
 
+        # Webhook status
+        if self.webhook:
+            if self.webhook.last_signal_at:
+                ts = self.webhook.last_signal_at.strftime("%Y-%m-%d %H:%M:%S")
+                lines.append(f"\U0001f310 Webhook: active ({self.webhook.total_signals} signals, last: {ts})")
+            else:
+                lines.append("\U0001f310 Webhook: listening (no signals yet)")
+        else:
+            lines.append("\U0001f310 Webhook: disabled")
+
+        # Optional web dashboard link
+        if self.config.web_url:
+            lines.append(f"\n\U0001f517 <a href=\"{self.config.web_url}\">Web Dashboard</a>")
+
         return "\n".join(lines)
 
     async def _sync_flex_deposits(self) -> None:
