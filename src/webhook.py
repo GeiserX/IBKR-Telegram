@@ -1,5 +1,6 @@
 """Webhook API for receiving trade signals from external sources."""
 
+import asyncio
 import hmac
 import logging
 from datetime import UTC, datetime
@@ -84,7 +85,10 @@ class WebhookServer:
         )
 
         try:
-            result = await self._on_signal(signal)
+            result = await asyncio.wait_for(self._on_signal(signal), timeout=30)
+        except TimeoutError:
+            logger.warning("Signal processing timed out")
+            return web.json_response({"error": "processing timeout"}, status=504)
         except Exception:
             logger.exception("Signal processing failed")
             return web.json_response(
