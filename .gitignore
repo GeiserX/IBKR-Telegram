@@ -27,3 +27,6 @@ Thumbs.db
 # Docker
 ib-gateway-*-data/
 tws_settings/
+
+# OMC state
+.omc/

@@ -8,13 +8,27 @@
 
 Self-hosted Telegram bot for Interactive Brokers. Manage your portfolio, execute trades, and monitor positions — all from Telegram.
 
+## DISCLAIMER — PLEASE READ CAREFULLY
+
+**USE THIS SOFTWARE AT YOUR OWN RISK.**
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. SEE THE [GPL-3.0 LICENSE](LICENSE) FOR THE FULL WARRANTY DISCLAIMER.
+
+- This software is **NOT financial advice**. Nothing in this project constitutes a recommendation to buy, sell, or hold any financial instrument.
+- You are **SOLELY responsible** for your own trading decisions and any resulting financial losses.
+- The author(s) accept **NO LIABILITY** for financial losses of any kind, whether direct, indirect, incidental, or consequential, arising from the use of this software.
+- **Trading involves substantial risk of loss** and is not suitable for every investor. You could lose some or all of your invested capital.
+- **Past performance does not guarantee future results.**
+- You should **test thoroughly with paper trading accounts** before using this software with real money.
+
 ## What It Does
 
-- **Multi-account trading** — manage multiple IBKR accounts from a single bot, with per-account allocation and position limits
-- **Options-first** — built-in option chain wizard for LEAPS, with deep ITM strike selection and automatic contract matching
-- **Safety-first execution** — market hours checks, duplicate signal detection, position limit enforcement, and mandatory confirmation before every trade
-- **Real-time portfolio sync** — periodic position snapshots, P&L tracking, and Flex Web Service integration for deposit/withdrawal history
-- **Margin compliance** — configurable soft (alert) or hard (auto-sell) margin enforcement per account
+- **Multi-account trading** — manage multiple IBKR accounts simultaneously from a single bot instance. Each account connects to its own IB Gateway container. The same percentage allocation is applied proportionally across all accounts, with per-account settings for position limits, margin modes, and display names — all configured in `config.yaml`.
+- **Configurable instrument support** — trade any instrument supported by IBKR, including stocks, options, futures, and more. The `asset_types` field in config controls which instruments are active. A built-in option chain wizard provides LEAPS selection with deep ITM strike matching and automatic contract resolution.
+- **Safety-first execution** — market hours checks, duplicate signal detection, position limit enforcement, and mandatory confirmation before every trade.
+- **Real-time portfolio sync** — periodic position snapshots, P&L tracking, and Flex Web Service integration for deposit/withdrawal history.
+- **Margin compliance** — configurable soft (alert) or hard (auto-sell) margin enforcement per account.
+- **Webhook API** — optional HTTP endpoint for receiving trade signals from external sources (TradingView, custom parsers, etc.).
 
 ## Features
 
@@ -85,6 +99,7 @@ trading:
   confirm_before_execute: true   # Require Telegram confirmation
   asset_types:
     - options
+    - stocks
 ```
 
 ### Environment Variables
@@ -94,6 +109,8 @@ trading:
 | `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather |
 | `TELEGRAM_ADMIN_CHAT_ID` | Your Telegram user ID (admin only) |
 | `CONFIG_PATH` | Path to config.yaml (default: `config.yaml`) |
+| `WEBHOOK_SECRET` | Secret for webhook Bearer auth (optional, enables webhook API) |
+| `WEBHOOK_PORT` | Webhook server port (default: `8080`) |
 | `MARGIN_MODE_<NAME>` | Per-account margin mode override |
 | `MAX_MARGIN_<NAME>` | Per-account margin cap override (USD) |
 
@@ -104,6 +121,27 @@ trading:
 | `off` | No margin awareness — sizes based on cash only |
 | `soft` | Uses margin for position sizing, sends alerts when approaching limits |
 | `hard` | Soft behavior + automatically sells positions when margin limits are breached |
+
+## Webhook API
+
+The bot optionally exposes an HTTP endpoint for receiving trade signals from external sources such as TradingView alerts, custom parsers, or other trading systems.
+
+**Endpoint:** `POST /api/v1/signal`
+
+**Authentication:** Bearer token via the `Authorization` header. Set `WEBHOOK_SECRET` in your environment to enable the webhook server.
+
+**Signal flow:** Incoming signals are saved to the database and presented to the admin in Telegram for confirmation before execution — the same confirmation gate as manual commands.
+
+**Health check:** `GET /health` returns `{"status": "ok"}`.
+
+**Example request:**
+
+```bash
+curl -X POST http://localhost:8080/api/v1/signal \
+  -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"ticker": "AAPL", "action": "BUY", "target_weight_pct": 5}'
+```
 
 ## IB Gateway
 
@@ -118,17 +156,21 @@ See `docker-compose.example.yml` for the full configuration.
 ## Architecture
 
 ```
-Telegram ←→ Bot (aiogram) ←→ TradeExecutor ←→ IB Gateway (ib-async) ←→ IBKR
-                ↕                    ↕
+Telegram <-> Bot (aiogram) <-> TradeExecutor <-> IB Gateway (ib-async) <-> IBKR
+                |                    |
              SQLite DB          Safety Checks
            (trades.db)      (hours, limits, dupes)
+                ^
+         Webhook API  <-  External Sources (optional)
+       (POST /api/v1/signal)
 ```
 
 - **Bot** (`bot.py`): Telegram command handling, inline keyboards, confirmation flows
 - **Executor** (`executor.py`): IBKR connection management, order sizing, option chain resolution
 - **Safety** (`safety.py`): Market hours, position limits, duplicate detection
 - **DB** (`db.py`): Trade log, signal history, deposit tracking
-- **App** (`app.py`): Orchestration — wires bot, executor, DB, and periodic sync
+- **Webhook** (`webhook.py`): HTTP server for external trade signals with Bearer auth
+- **App** (`app.py`): Orchestration — wires bot, executor, DB, webhook, and periodic sync
 
 ## Contributing
 

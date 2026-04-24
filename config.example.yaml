@@ -14,3 +14,7 @@ trading:
   confirm_before_execute: true
   asset_types:
     - options
+
+# Webhook API (optional — for receiving signals from external sources)
+# webhook_secret: "your-secret-here"
+# webhook_port: 8080
