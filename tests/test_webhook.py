@@ -127,6 +127,19 @@ async def test_invalid_weight_negative(client):
 
 
 @pytest.mark.asyncio
+async def test_invalid_weight_bool(client):
+    """Booleans are not valid for target_weight_pct even though bool is a subclass of int."""
+    resp = await client.post(
+        "/api/v1/signal",
+        json={"ticker": "AAPL", "action": "BUY", "target_weight_pct": True},
+        headers={"Authorization": "Bearer test-secret"},
+    )
+    assert resp.status == 400
+    data = await resp.json()
+    assert "target_weight_pct" in data["error"]
+
+
+@pytest.mark.asyncio
 async def test_invalid_weight_over_100(client):
     resp = await client.post(
         "/api/v1/signal",
@@ -139,9 +152,33 @@ async def test_invalid_weight_over_100(client):
 
 
 @pytest.mark.asyncio
-async def test_callback_exception_returns_500():
-    """When on_signal raises, the webhook returns 500 with a structured error."""
+async def test_invalid_message_id_type(client):
+    """message_id must be an integer, not a string."""
+    resp = await client.post(
+        "/api/v1/signal",
+        json={"ticker": "AAPL", "action": "BUY", "message_id": "abc"},
+        headers={"Authorization": "Bearer test-secret"},
+    )
+    assert resp.status == 400
+    data = await resp.json()
+    assert "message_id" in data["error"]
 
+
+@pytest.mark.asyncio
+async def test_invalid_related_ticker_type(client):
+    """related_ticker must be a string, not a number."""
+    resp = await client.post(
+        "/api/v1/signal",
+        json={"ticker": "AAPL", "action": "BUY", "related_ticker": 123},
+        headers={"Authorization": "Bearer test-secret"},
+    )
+    assert resp.status == 400
+    data = await resp.json()
+    assert "related_ticker" in data["error"]
+
+
+@pytest.fixture
+async def failing_client():
     async def failing_callback(signal: TradeSignal) -> dict:
         raise RuntimeError("DB connection lost")
 
@@ -149,17 +186,34 @@ async def test_callback_exception_returns_500():
     test_server = TestServer(server_obj._app)
     client = TestClient(test_server)
     await client.start_server()
-    try:
-        resp = await client.post(
-            "/api/v1/signal",
-            json={"ticker": "AAPL", "action": "BUY"},
-            headers={"Authorization": "Bearer test-secret"},
-        )
-        assert resp.status == 500
-        data = await resp.json()
-        assert data["error"] == "internal processing error"
-    finally:
-        await client.close()
+    yield client
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_callback_exception_returns_500(failing_client):
+    """When on_signal raises, the webhook returns 500 with a structured error."""
+    resp = await failing_client.post(
+        "/api/v1/signal",
+        json={"ticker": "AAPL", "action": "BUY"},
+        headers={"Authorization": "Bearer test-secret"},
+    )
+    assert resp.status == 500
+    data = await resp.json()
+    assert data["error"] == "internal processing error"
+
+
+@pytest.mark.asyncio
+async def test_weight_zero_is_valid(client, received_signals):
+    """target_weight_pct=0 means 'close position' and should be accepted."""
+    resp = await client.post(
+        "/api/v1/signal",
+        json={"ticker": "AAPL", "action": "SELL", "target_weight_pct": 0},
+        headers={"Authorization": "Bearer test-secret"},
+    )
+    assert resp.status == 202
+    assert len(received_signals) == 1
+    assert received_signals[0].target_weight_pct == 0
 
 
 @pytest.mark.asyncio
@@ -210,23 +264,11 @@ async def test_health_endpoint(client):
 
 
 @pytest.mark.asyncio
-async def test_no_auth_when_no_secret(received_signals):
-    """When no secret is configured, requests are accepted without auth."""
+async def test_empty_secret_raises_value_error():
+    """WebhookServer requires a non-empty secret — empty string raises ValueError."""
 
     async def on_signal(signal: TradeSignal) -> dict:
-        received_signals.append(signal)
         return {"signal_id": 1, "status": "pending_confirmation"}
 
-    server = WebhookServer(secret="", port=0, on_signal=on_signal)
-    test_server = TestServer(server._app)
-    client = TestClient(test_server)
-    await client.start_server()
-
-    resp = await client.post(
-        "/api/v1/signal",
-        json={"ticker": "GOOG", "action": "BUY"},
-    )
-    assert resp.status == 202
-    assert len(received_signals) == 1
-
-    await client.close()
+    with pytest.raises(ValueError, match="non-empty secret"):
+        WebhookServer(secret="", port=0, on_signal=on_signal)

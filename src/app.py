@@ -100,12 +100,25 @@ class App:
         tasks = []
         if self.config.bot_token:
             tasks.append(self.bot.start())
-        else:
-            logger.warning("No bot token configured — running webhook API only")
         if self.config.accounts:
             tasks.append(self._periodic_sync())
 
-        logger.info(f"Starting {len(tasks)} concurrent tasks...")
+        if not tasks:
+            if self.webhook:
+                logger.info("Running webhook API only (no bot token or accounts configured)")
+                # Keep alive — webhook server runs in its own aiohttp runner
+                stop_event = asyncio.Event()
+                try:
+                    await stop_event.wait()
+                finally:
+                    await self.shutdown()
+                return
+            else:
+                logger.error("Nothing to run: no bot token, no accounts, no webhook")
+                await self.shutdown()
+                return
+
+        logger.info("Starting %d concurrent tasks...", len(tasks))
         try:
             await asyncio.gather(*tasks)
         finally:
@@ -124,6 +137,10 @@ class App:
 
     async def _on_webhook_signal(self, signal: TradeSignal) -> dict:
         """Handle an incoming webhook signal — save to DB and send for confirmation."""
+        if await check_duplicate_signal(self.db, signal.ticker, signal.action):
+            logger.info("Duplicate webhook signal skipped: %s %s", signal.action, signal.ticker)
+            return {"status": "duplicate_skipped", "ticker": signal.ticker, "action": signal.action}
+
         signal_id = await self.db.save_signal(
             message_id=signal.message_id or 0,
             ticker=signal.ticker,

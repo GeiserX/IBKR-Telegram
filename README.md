@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="banners/banner.svg" alt="IBKR-Telegram" width="100%">
+</p>
+
 # IBKR-Telegram
 
 [![CI](https://github.com/GeiserX/IBKR-Telegram/actions/workflows/ci.yml/badge.svg)](https://github.com/GeiserX/IBKR-Telegram/actions/workflows/ci.yml)
