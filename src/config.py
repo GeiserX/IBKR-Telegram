@@ -61,6 +61,10 @@ class Config:
     # Paths
     db_path: str = "data/trades.db"
 
+    # Webhook API (optional — for receiving signals from external sources)
+    webhook_secret: str = ""
+    webhook_port: int = 8080
+
     def validate(self) -> list[str]:
         """Validate essential config fields. Returns list of errors."""
         errors = []
@@ -126,4 +130,6 @@ def load_config() -> Config:
         admin_chat_id=_int_env("TELEGRAM_ADMIN_CHAT_ID", telegram.get("admin_chat_id", 0)),
         accounts=accounts,
         trading=TradingConfig(**trading_data) if trading_data else TradingConfig(),
+        webhook_secret=os.getenv("WEBHOOK_SECRET", data.get("webhook_secret", "")),
+        webhook_port=_int_env("WEBHOOK_PORT", data.get("webhook_port", 8080)),
     )

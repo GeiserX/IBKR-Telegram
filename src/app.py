@@ -18,6 +18,7 @@ from .db import Database
 from .executor import ExecutionResult, TradeExecutor
 from .models import TradeSignal
 from .safety import check_duplicate_signal, check_position_limits, is_market_open, time_until_market_open
+from .webhook import WebhookServer
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,15 @@ class App:
         self._gateway_containers = [a.gateway_host for a in config.accounts]
         self._gateway_paused = False
         self._resume_task: asyncio.Task | None = None
+
+        # Webhook API (optional — started only when webhook_secret is set)
+        self.webhook: WebhookServer | None = None
+        if config.webhook_secret:
+            self.webhook = WebhookServer(
+                secret=config.webhook_secret,
+                port=config.webhook_port,
+                on_signal=self._on_webhook_signal,
+            )
 
         # Wire all callbacks into the bot
         self.bot = ConfirmationBot(
@@ -84,11 +94,14 @@ class App:
             await self._sync_flex_deposits()
             await self._sync_positions()
 
+        if self.webhook:
+            await self.webhook.start()
+
         tasks = []
         if self.config.bot_token:
             tasks.append(self.bot.start())
         else:
-            logger.warning("No bot token configured — nothing to run")
+            logger.warning("No bot token configured — running webhook API only")
         if self.config.accounts:
             tasks.append(self._periodic_sync())
 
@@ -101,11 +114,35 @@ class App:
     async def shutdown(self) -> None:
         """Graceful shutdown of all components."""
         logger.info("Shutting down...")
+        if self.webhook:
+            await self.webhook.stop()
         if self.config.bot_token:
             await self.bot.stop()
         await self.executor.disconnect_all()
         await self.db.close()
         logger.info("Shutdown complete")
+
+    async def _on_webhook_signal(self, signal: TradeSignal) -> dict:
+        """Handle an incoming webhook signal — save to DB and send for confirmation."""
+        signal_id = await self.db.save_signal(
+            message_id=signal.message_id or 0,
+            ticker=signal.ticker,
+            action=signal.action,
+            target_weight_pct=signal.target_weight_pct,
+            amount_description=signal.amount_description,
+            related_ticker=signal.related_ticker,
+            raw_text=signal.raw_text,
+            source=signal.source,
+        )
+        await self.db.log_audit(
+            "signal_received", signal_id, signal.ticker,
+            f"Webhook {signal.action} ${signal.ticker}",
+        )
+        if self.config.bot_token:
+            await self.bot.send_confirmation(signal, signal_id=signal_id)
+            return {"signal_id": signal_id, "status": "pending_confirmation"}
+        logger.warning("Signal %d saved but no bot configured to confirm it", signal_id)
+        return {"signal_id": signal_id, "status": "saved_no_bot"}
 
     async def _on_trade_confirmed(
         self, signal_id: int, signal: TradeSignal
