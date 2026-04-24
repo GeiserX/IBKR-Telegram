@@ -103,6 +103,7 @@ class Database:
         """Initialize database and create tables."""
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._db = await aiosqlite.connect(self.db_path)
+        await self._db.execute("PRAGMA foreign_keys = ON")
         await self._db.execute("PRAGMA journal_mode=WAL")
         self._db.row_factory = aiosqlite.Row
         await self._db.executescript(SCHEMA)
@@ -392,6 +393,7 @@ class Database:
             (account_name, report_date, amount, currency, description,
              datetime.now(UTC).isoformat()),
         )
+        await self._db.commit()
 
     async def get_net_deposits(self, account_name: str) -> float:
         """Sum all stored deposit/withdrawal amounts for an account."""

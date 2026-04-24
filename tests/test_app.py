@@ -576,7 +576,7 @@ class TestOnHealthRequested:
         app = _build_app()
         app.executor.connectors = {}
         app.webhook.last_signal_at = None
-        app.webhook.total_signals = 0
+        app.webhook.total_processed = 0
 
         result = await app._on_health_requested()
         assert "Webhook: listening (no signals yet)" in result

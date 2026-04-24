@@ -3,6 +3,8 @@
 import asyncio
 import hmac
 import logging
+import time
+from collections import defaultdict
 from datetime import UTC, datetime
 
 from aiohttp import web
@@ -27,8 +29,10 @@ class WebhookServer:
         self._app.router.add_post("/api/v1/signal", self._handle_signal)
         self._app.router.add_get("/health", self._handle_health)
         self._runner: web.AppRunner | None = None
+        self._auth_failures: dict[str, list[float]] = defaultdict(list)
         self.last_signal_at: datetime | None = None
-        self.total_signals: int = 0
+        self.total_received: int = 0
+        self.total_processed: int = 0
 
     async def start(self) -> None:
         self._runner = web.AppRunner(self._app)
@@ -45,9 +49,27 @@ class WebhookServer:
         auth = request.headers.get("Authorization", "")
         return hmac.compare_digest(auth, f"Bearer {self._secret}")
 
+    def _is_rate_limited(self, ip: str) -> bool:
+        now = time.monotonic()
+        window = [t for t in self._auth_failures[ip] if now - t < 60]
+        self._auth_failures[ip] = window
+        return len(window) >= 5
+
     async def _handle_signal(self, request: web.Request) -> web.Response:
+        ip = request.remote or "unknown"
+        if self._is_rate_limited(ip):
+            return web.json_response({"error": "rate limited"}, status=429)
+
         if not self._check_auth(request):
+            self._auth_failures[ip].append(time.monotonic())
             return web.json_response({"error": "unauthorized"}, status=401)
+
+        if request.content_type != "application/json":
+            return web.json_response(
+                {"error": "content-type must be application/json"}, status=415,
+            )
+
+        self.total_received += 1
 
         try:
             data = await request.json()
@@ -110,7 +132,7 @@ class WebhookServer:
             )
 
         self.last_signal_at = datetime.now(UTC)
-        self.total_signals += 1
+        self.total_processed += 1
 
         # Duplicates return 200 (idempotent), new signals return 202 (accepted)
         status = 200 if result.get("status") == "duplicate_skipped" else 202

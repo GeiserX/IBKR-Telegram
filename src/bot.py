@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 # Module-level state shared between ConfirmationBot and router handlers
-_pending: dict[str, tuple[int, TradeSignal]] = {}  # signal_key -> (db_signal_id, signal)
+_pending: dict[str, dict] = {}  # signal_key -> {"signal_id": int, "signal": TradeSignal, "_created_at": float}
 _admin_chat_id: int = 0
 _on_confirm: Callable[[int, TradeSignal], Awaitable] | None = None
 _on_positions: Callable[[], Awaitable[str]] | None = None
@@ -178,9 +178,10 @@ class ConfirmationBot:
 
     async def send_confirmation(self, signal: TradeSignal, signal_id: int = 0) -> None:
         """Send a trade signal to the admin for confirmation."""
+        _cleanup_stale_pending()
         ts = int(signal.timestamp.timestamp()) if signal.timestamp else 0
         signal_key = f"{signal.ticker}_{signal.action}_{ts}_{signal_id}"
-        _pending[signal_key] = (signal_id, signal)
+        _pending[signal_key] = {"signal_id": signal_id, "signal": signal, "_created_at": _time.monotonic()}
 
         text = (
             f"\U0001f514 <b>New Trade Signal</b>\n\n"
@@ -251,6 +252,14 @@ def _is_admin(user_id: int) -> bool:
     if _admin_chat_id == 0:
         return False
     return user_id == _admin_chat_id
+
+
+def _cleanup_stale_pending() -> None:
+    """Remove pending confirmations older than 24 hours."""
+    now = _time.monotonic()
+    stale = [k for k, v in _pending.items() if isinstance(v, dict) and now - v.get("_created_at", now) > 86400]
+    for k in stale:
+        _pending.pop(k, None)
 
 
 def _next_order_id() -> int:
@@ -386,7 +395,8 @@ async def cmd_pending(message: Message) -> None:
         await message.answer("No pending confirmations.")
         return
     lines = ["\U0001f552 <b>Pending Confirmations</b>\n"]
-    for key, (signal_id, signal) in _pending.items():
+    for key, entry in _pending.items():
+        signal_id, signal = entry["signal_id"], entry["signal"]
         lines.append(f"  ${escape(signal.ticker)} \u2014 {escape(signal.action)} (id={signal_id})")
     await message.answer("\n".join(lines), parse_mode="HTML")
 
@@ -959,7 +969,7 @@ async def on_execute(callback: CallbackQuery) -> None:
     for k in [k for k, t in _executed_signals.items() if t < cutoff]:
         del _executed_signals[k]
 
-    signal_id, signal = pending
+    signal_id, signal = pending["signal_id"], pending["signal"]
     await callback.answer(f"Executing {signal.action} ${signal.ticker}...")
 
     if _on_confirm:

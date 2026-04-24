@@ -31,7 +31,8 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # NOTE: /pause and /resume require Docker access. Use a docker-socket-proxy
+    # or manage gateway containers externally. Do NOT mount docker.sock directly.
     depends_on:
       - ib-gateway
     networks:

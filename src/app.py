@@ -8,6 +8,7 @@ import ssl
 import urllib.request
 from collections import defaultdict
 from datetime import UTC, datetime
+from html import escape as html_escape
 from zoneinfo import ZoneInfo
 
 import docker
@@ -39,6 +40,9 @@ class App:
         self._deposit_baselines = {
             a.name: a.net_deposits for a in config.accounts
         }
+
+        # Execution lock — prevents concurrent trade confirmations
+        self._execution_lock = asyncio.Lock()
 
         # Gateway pause/resume state — derive container names from config
         self._gateway_containers = [a.gateway_host for a in config.accounts]
@@ -175,81 +179,82 @@ class App:
         await self.db.log_audit("trade_confirmed", signal_id, signal.ticker,
                                 f"{signal.action} confirmed by admin")
 
-        # Market hours check
-        if not is_market_open():
-            wait = time_until_market_open()
-            msg = f"Market closed — next open in {wait}"
-            logger.warning(f"[{signal.ticker}] {msg}")
-            await self.db.update_signal_status(signal_id, "skipped")
-            await self.db.log_audit("market_closed", signal_id, signal.ticker, msg)
-            return [ExecutionResult(
-                account_name="all",
-                success=False,
-                error=msg,
-            )]
+        async with self._execution_lock:
+            # Market hours check
+            if not is_market_open():
+                wait = time_until_market_open()
+                msg = f"Market closed — next open in {wait}"
+                logger.warning(f"[{signal.ticker}] {msg}")
+                await self.db.update_signal_status(signal_id, "skipped")
+                await self.db.log_audit("market_closed", signal_id, signal.ticker, msg)
+                return [ExecutionResult(
+                    account_name="all",
+                    success=False,
+                    error=msg,
+                )]
 
-        # Duplicate detection
-        if await check_duplicate_signal(self.db, signal.ticker, signal.action):
-            await self.db.update_signal_status(signal_id, "skipped")
-            await self.db.log_audit("duplicate_skipped", signal_id, signal.ticker,
-                                    f"Duplicate {signal.action} within window")
-            return [ExecutionResult(
-                account_name="all",
-                success=False,
-                error=f"Duplicate signal: {signal.action} ${signal.ticker} already processed recently",
-            )]
+            # Duplicate detection
+            if await check_duplicate_signal(self.db, signal.ticker, signal.action):
+                await self.db.update_signal_status(signal_id, "skipped")
+                await self.db.log_audit("duplicate_skipped", signal_id, signal.ticker,
+                                        f"Duplicate {signal.action} within window")
+                return [ExecutionResult(
+                    account_name="all",
+                    success=False,
+                    error=f"Duplicate signal: {signal.action} ${signal.ticker} already processed recently",
+                )]
 
-        # Position limit checks (per account) — skip breaching accounts
-        blocked_accounts: set[str] = set()
-        for account_cfg in self.config.accounts:
-            positions = await self.db.get_positions(account_cfg.name)
-            limit_err = check_position_limits(
-                signal.action, signal.ticker,
-                signal.target_weight_pct or 5.0,
-                account_cfg.max_position_pct,
-                account_cfg.max_allocation_pct,
-                positions,
+            # Position limit checks (per account) — skip breaching accounts
+            blocked_accounts: set[str] = set()
+            for account_cfg in self.config.accounts:
+                positions = await self.db.get_positions(account_cfg.name)
+                limit_err = check_position_limits(
+                    signal.action, signal.ticker,
+                    signal.target_weight_pct or 5.0,
+                    account_cfg.max_position_pct,
+                    account_cfg.max_allocation_pct,
+                    positions,
+                )
+                if limit_err:
+                    blocked_accounts.add(account_cfg.name)
+                    logger.warning(f"[{account_cfg.name}] Position limit: {limit_err}")
+                    await self.db.log_audit("limit_breach", signal_id, signal.ticker,
+                                            f"{account_cfg.name}: {limit_err}")
+
+            # Update signal status in DB
+            await self.db.update_signal_status(signal_id, "confirmed")
+
+            # Execute across all connected accounts (skip limit-breaching ones)
+            results = await self.executor.execute(signal, exclude_accounts=blocked_accounts)
+
+            # Save execution results to DB (status="submitted" — actual fills update later)
+            for result in results:
+                status = "submitted" if result.success else "failed"
+                await self.db.save_execution(
+                    signal_id=signal_id,
+                    account_name=result.account_name,
+                    order_id=result.order_id,
+                    filled_qty=0,
+                    avg_price=0.0,
+                    target_pct=signal.target_weight_pct or 0,
+                    actual_pct=0.0,
+                    status=status,
+                    error=result.error,
+                )
+
+            # Update signal status based on results
+            any_success = any(r.success for r in results)
+            final_status = "executed" if any_success else "failed"
+            await self.db.update_signal_status(signal_id, final_status)
+            await self.db.log_audit(
+                f"execution_{final_status}", signal_id, signal.ticker,
+                "; ".join(
+                    f"{r.account_name}: {'OK' if r.success else r.error}"
+                    for r in results
+                ),
             )
-            if limit_err:
-                blocked_accounts.add(account_cfg.name)
-                logger.warning(f"[{account_cfg.name}] Position limit: {limit_err}")
-                await self.db.log_audit("limit_breach", signal_id, signal.ticker,
-                                        f"{account_cfg.name}: {limit_err}")
 
-        # Update signal status in DB
-        await self.db.update_signal_status(signal_id, "confirmed")
-
-        # Execute across all connected accounts (skip limit-breaching ones)
-        results = await self.executor.execute(signal, exclude_accounts=blocked_accounts)
-
-        # Save execution results to DB (status="submitted" — actual fills update later)
-        for result in results:
-            status = "submitted" if result.success else "failed"
-            await self.db.save_execution(
-                signal_id=signal_id,
-                account_name=result.account_name,
-                order_id=result.order_id,
-                filled_qty=0,
-                avg_price=0.0,
-                target_pct=signal.target_weight_pct or 0,
-                actual_pct=0.0,
-                status=status,
-                error=result.error,
-            )
-
-        # Update signal status based on results
-        any_success = any(r.success for r in results)
-        final_status = "executed" if any_success else "failed"
-        await self.db.update_signal_status(signal_id, final_status)
-        await self.db.log_audit(
-            f"execution_{final_status}", signal_id, signal.ticker,
-            "; ".join(
-                f"{r.account_name}: {'OK' if r.success else r.error}"
-                for r in results
-            ),
-        )
-
-        return results
+            return results
 
     async def _on_positions_requested(self) -> str:
         """Called when admin requests /positions."""
@@ -1002,6 +1007,8 @@ class App:
             positions = await connector.get_positions()
             matching = [p for p in positions if p.contract.symbol == ticker and p.position > 0]
             if matching:
+                if len(matching) > 1:
+                    logger.warning("Multiple positions for %s on %s, using first", ticker, acfg.name)
                 positions_by_account[acfg.name] = matching[0]
 
         if not positions_by_account:
@@ -1128,6 +1135,17 @@ class App:
             matching = [p for p in positions if p.contract.symbol == ticker and p.position > 0]
             if not matching:
                 results.append(f"\u274c {account_name}: position gone")
+                continue
+
+            held_qty = int(abs(matching[0].position))
+            if qty > held_qty:
+                logger.warning(
+                    "Sell qty %d exceeds held %d for %s on %s, clamping",
+                    qty, held_qty, ticker, account_name,
+                )
+                qty = held_qty
+            if qty <= 0:
+                logger.warning("No position to sell for %s on %s, skipping", ticker, account_name)
                 continue
 
             contract = matching[0].contract
@@ -1518,7 +1536,7 @@ class App:
         disconnected = []
         for cfg in self.config.accounts:
             connector = self.executor.connectors.get(cfg.name)
-            display = cfg.display_name or cfg.name
+            display = html_escape(cfg.display_name or cfg.name)
             if connector and connector.is_connected:
                 connected.append(display)
             else:
@@ -1547,7 +1565,7 @@ class App:
         if self.webhook:
             if self.webhook.last_signal_at:
                 ts = self.webhook.last_signal_at.strftime("%Y-%m-%d %H:%M:%S")
-                lines.append(f"\U0001f310 Webhook: active ({self.webhook.total_signals} signals, last: {ts})")
+                lines.append(f"\U0001f310 Webhook: active ({self.webhook.total_processed} signals, last: {ts})")
             else:
                 lines.append("\U0001f310 Webhook: listening (no signals yet)")
         else:
@@ -1555,7 +1573,7 @@ class App:
 
         # Optional web dashboard link
         if self.config.web_url:
-            lines.append(f"\n\U0001f517 <a href=\"{self.config.web_url}\">Web Dashboard</a>")
+            lines.append(f"\n\U0001f517 <a href=\"{html_escape(self.config.web_url)}\">Web Dashboard</a>")
 
         return "\n".join(lines)
 
@@ -1569,14 +1587,25 @@ class App:
 
         Total = config.net_deposits (baseline) + SUM(cash_transactions in DB)
         """
-        for account_cfg in self.config.accounts:
-            if not account_cfg.flex_token or not account_cfg.flex_query_id:
-                continue
+        # Fetch flex transactions concurrently across accounts
+        flex_accounts = [
+            acc for acc in self.config.accounts
+            if acc.flex_token and acc.flex_query_id
+        ]
+        if not flex_accounts:
+            return
+
+        fetch_tasks = [
+            asyncio.to_thread(self._fetch_flex_transactions, acc.flex_token, acc.flex_query_id)
+            for acc in flex_accounts
+        ]
+        fetch_results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+
+        for account_cfg, result in zip(flex_accounts, fetch_results):
             try:
-                transactions = await asyncio.to_thread(
-                    self._fetch_flex_transactions,
-                    account_cfg.flex_token, account_cfg.flex_query_id,
-                )
+                if isinstance(result, Exception):
+                    raise result
+                transactions = result
                 if transactions is not None:
                     # Store each transaction in the DB (dedup via UNIQUE constraint)
                     for txn in transactions:
@@ -1690,18 +1719,24 @@ class App:
                         connector.req_account_updates(True, accounts[0])
                         await asyncio.sleep(2)
                         portfolio = await connector.get_portfolio()
+                # Get NLV in all available currencies + exchange rate
+                nlv_all = await connector.get_nlv_by_currency()
+                nlv_usd = nlv_all.get("USD", 0.0)
+
                 total_market_value = 0.0
                 total_pnl = 0.0
                 for item in portfolio:
                     ticker = item.contract.localSymbol or item.contract.symbol
                     total_market_value += item.marketValue
                     total_pnl += item.unrealizedPNL
+                    weight_pct = (abs(item.marketValue) / nlv_usd * 100) if nlv_usd > 0 else 0.0
                     await self.db.upsert_position(
                         account_name=name,
                         ticker=ticker,
                         quantity=int(item.position),
                         avg_cost=item.averageCost,
                         current_price=item.marketPrice,
+                        weight_pct=weight_pct,
                         pnl=item.unrealizedPNL,
                     )
 
@@ -1713,9 +1748,6 @@ class App:
                 deleted = await self.db.delete_stale_positions(name, active_tickers)
                 if deleted:
                     logger.info(f"[{name}] Cleaned {deleted} stale position(s) from DB")
-
-                # Get NLV in all available currencies + exchange rate
-                nlv_all = await connector.get_nlv_by_currency()
                 nlv = next(iter(nlv_all.values()), 0.0)
                 base_currency = next(iter(nlv_all.keys()), "USD")
                 nlv_eur = nlv_all.get("EUR", 0.0)
@@ -1863,13 +1895,13 @@ class App:
 
     async def _on_order_event(self, account_name: str, info: dict) -> None:
         """Called on any order status change — notify via Telegram."""
-        display = next(
+        display = html_escape(next(
             (a.display_name for a in self.config.accounts if a.name == account_name),
             account_name,
-        )
+        ))
         event = info.get("event", "unknown")
         symbol = info.get("symbol", "?")
-        local_sym = info.get("local_symbol", symbol)
+        local_sym = html_escape(info.get("local_symbol", symbol))
         action = info.get("action", "?")
         qty = info.get("qty", 0)
         avg_price = info.get("avg_price", 0.0)
@@ -2031,6 +2063,7 @@ class App:
             order_id = await connector.place_order(contract, order)
 
             # Wait for fill (up to 30s) instead of fixed sleep
+            trades = []
             for _ in range(30):
                 await asyncio.sleep(1)
                 trades = [t for t in connector.get_trades()
