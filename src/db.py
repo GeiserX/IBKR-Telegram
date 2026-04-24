@@ -89,6 +89,19 @@ CREATE INDEX IF NOT EXISTS idx_positions_account ON positions(account_name);
 CREATE INDEX IF NOT EXISTS idx_audit_event ON audit_log(event);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
 CREATE INDEX IF NOT EXISTS idx_cash_txn_account ON cash_transactions(account_name);
+
+CREATE TABLE IF NOT EXISTS nlv_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_name TEXT NOT NULL,
+    date TEXT NOT NULL,
+    nlv_eur REAL NOT NULL,
+    nlv_usd REAL NOT NULL,
+    net_deposits REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    UNIQUE(account_name, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_nlv_history_account_date ON nlv_history(account_name, date);
 """
 
 
@@ -438,6 +451,29 @@ class Database:
             )
         await self._db.commit()
         return cursor.rowcount
+
+    async def snapshot_nlv(
+        self,
+        account_name: str,
+        nlv_eur: float,
+        nlv_usd: float,
+        net_deposits: float = 0,
+    ) -> None:
+        """Record a daily NLV snapshot (one per account per day)."""
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        await self._db.execute(
+            """INSERT INTO nlv_history
+               (account_name, date, nlv_eur, nlv_usd, net_deposits, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(account_name, date) DO UPDATE SET
+                   nlv_eur = excluded.nlv_eur,
+                   nlv_usd = excluded.nlv_usd,
+                   net_deposits = excluded.net_deposits,
+                   created_at = excluded.created_at""",
+            (account_name, today, nlv_eur, nlv_usd, net_deposits,
+             datetime.now(UTC).isoformat()),
+        )
+        await self._db.commit()
 
     async def log_audit(
         self,
