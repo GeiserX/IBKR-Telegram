@@ -19,7 +19,7 @@ services:
       - trading
 
   ibkr-telegram:
-    image: drumsergio/ibkr-telegram:0.1.0
+    image: drumsergio/ibkr-telegram:0.1.12
     container_name: ibkr-telegram
     restart: unless-stopped
     environment:
@@ -34,7 +34,8 @@ services:
     # NOTE: /pause and /resume require Docker access. Use a docker-socket-proxy
     # or manage gateway containers externally. Do NOT mount docker.sock directly.
     depends_on:
-      - ib-gateway
+      ib-gateway:
+        condition: service_started
     networks:
       - trading
     read_only: true
@@ -44,6 +45,12 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8080/health\")'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 networks:
   trading:
