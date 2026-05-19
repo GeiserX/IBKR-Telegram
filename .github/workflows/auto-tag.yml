@@ -42,7 +42,7 @@ jobs:
           # This ensures the tag points to a commit without [skip ci],
           # so the tag push triggers Docker Publish.
           git tag "$NEW_TAG"
-          CURRENT=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          CURRENT=$(grep -oP '(?<=^version = ")[^"]+' pyproject.toml)
           if [ "$CURRENT" != "$VERSION" ]; then
             sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
             git config user.name "github-actions[bot]"
