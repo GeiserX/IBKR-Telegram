@@ -1,47 +1,91 @@
 # CLAUDE.md — IBKR-Telegram
 
 ## Overview
-Self-hosted Telegram bot for Interactive Brokers. Manages multi-account portfolios, executes trades with safety checks, monitors positions, and supports webhook-driven trade signals from external sources.
+Self-hosted Telegram bot for Interactive Brokers. Manages multi-account portfolios, executes trades with safety checks, monitors positions, and supports webhook-driven trade signals from external sources. Designed for options-first trading (LEAPS) with mandatory confirmation flows.
 
 ## Tech Stack
-- Python 3.12+ (pyproject.toml)
-- IB API (via IB Gateway containers)
-- Telegram Bot API
-- Docker / Docker Compose
-- pytest (tests/)
-- YAML configuration (config.yaml)
+- Python 3.12+ (pyproject.toml, fully async with `asyncio`)
+- `aiogram` 3.x (Telegram bot framework, inline keyboards, callback queries)
+- `ib-async` (async wrapper for TWS/Gateway API)
+- SQLite via `aiosqlite` (trade log, signal history, deposits)
+- PyYAML (config with environment variable overrides)
+- Docker SDK (gateway container management: pause/resume)
+- `defusedxml` (secure IBKR Flex Web Service parsing)
+- pytest + pytest-asyncio (tests/)
+- ruff (linting)
 
 ## Development
+
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Development
+pip install -e ".[dev]"
+python -m src
 
 # Run tests
-pytest tests/
+pytest tests/ -v
 
-# Run with Docker
-cp .env.example .env
-cp config.example.yaml config.yaml
-docker compose up -d
+# Lint
+ruff check .
+
+# Docker
+docker build -t ibkr-telegram .
+docker compose -f docker-compose.example.yml up
 ```
 
 Requires: IBKR account with API access, Telegram bot token, IB Gateway container per account.
 
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | Yes | Bot token from @BotFather |
+| `TELEGRAM_ADMIN_CHAT_ID` | Yes | Telegram user ID for admin |
+| `CONFIG_PATH` | No | Path to config.yaml (default: `config.yaml`) |
+| `MARGIN_MODE_<NAME>` | No | Per-account margin mode override |
+| `MAX_MARGIN_<NAME>` | No | Per-account margin cap in USD |
+
 ## Architecture
-- `src/` — main application source code
-- `tests/` — test suite
-- `config.example.yaml` — multi-account configuration template
-- `.env.example` — environment variable template
-- `Dockerfile` — container build definition
-- `docs/` — documentation
-- `banners/` — project branding assets
+
+```
+src/
+  __init__.py       # Package docstring
+  __main__.py       # Entry point (logging setup, asyncio.run)
+  app.py            # Orchestration: wires bot, executor, DB, periodic sync
+  bot.py            # Telegram command handlers, inline keyboards, confirmation flows
+  config.py         # YAML + env var config loading, dataclass validation
+  db.py             # SQLite schema, trade/signal/deposit CRUD
+  executor.py       # IBKR connection, order sizing, option chain, margin checks
+  models.py         # TradeSignal dataclass (shared across modules)
+  safety.py         # Market hours, position limits, duplicate detection
+tests/
+  test_executor.py  # Sell fraction parsing, ExecutionResult
+  test_safety.py    # Market hours, position limits, duplicate detection
+```
+
+### Key Design Decisions
+
+- **TradeSignal in models.py**: Extracted into its own module to avoid circular imports. All modules import from `models`.
+- **Multi-account**: `TradeExecutor` maintains one `IBKRConnector` per configured account. Orders execute across all accounts with same percentage allocation.
+- **Confirmation flow**: Every trade goes through Telegram inline keyboard confirmation before execution.
+- **Option chain resolution**: For LEAPS, selects furthest expiry with deepest ITM strike. Uses `reqSecDefOptParams` + `qualifyContracts`.
+- **Margin modes**: `off` (cash only), `soft` (margin-aware sizing + alerts), `hard` (soft + auto-sell enforcement). Per-account config.
+- **Gateway containers**: Derived from `config.accounts[].gateway_host`. Bot can pause/resume Docker containers for manual IBKR login.
 
 ## Key Rules
 - Never hardcode credentials; use `.env` and `config.yaml`
 - Never overwrite existing `.env` files
-- Always test with paper trading before live accounts
 - Safety-first: market hours checks, duplicate signal detection, position limits, mandatory trade confirmation
 - Docker image: `drumsergio/ibkr-telegram` with semver tags
 - License: GPL-3.0
+
+## Coding Conventions
+
+- **Line length**: 120 characters (`ruff` enforced)
+- **Type hints**: use throughout; `X | None` syntax (not `Optional[X]`)
+- **Async**: all I/O operations are async. Never use blocking calls in the event loop.
+- **Logging**: `logging.getLogger(__name__)` per module. Logger name: `ibkr_telegram`.
+- **Error handling**: IBKR operations must handle `ConnectionError`, `TimeoutError`, and `asyncio.TimeoutError`. Financial calculations must guard against `NaN`, zero prices, and missing data.
+- **SQL**: all queries use parameterized placeholders (`?`), never string interpolation.
+- **Config**: environment variables override YAML values. Per-account overrides use `MARGIN_MODE_<NAME>` and `MAX_MARGIN_<NAME>` patterns.
 
 *Generated by [LynxPrompt](https://lynxprompt.com) CLI*
