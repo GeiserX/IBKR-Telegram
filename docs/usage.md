@@ -1,4 +1,6 @@
-# Commands
+# Usage
+
+## Commands
 
 | Command | Description |
 |---------|-------------|

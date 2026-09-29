@@ -7,7 +7,7 @@ name = "ibkr-telegram"
 version = "0.1.28"
 description = "Telegram bot for Interactive Brokers: portfolio management, order execution, safety checks"
 readme = "README.md"
-license = "GPL-3.0-only"
+license = "GPL-3.0-or-later"
 requires-python = ">=3.12"
 authors = [{ name = "GeiserX" }]
 
