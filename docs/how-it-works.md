@@ -1,4 +1,4 @@
-# Architecture
+# How it works
 
 ```
 Telegram <-> Bot (aiogram) <-> TradeExecutor <-> IB Gateway (ib-async) <-> IBKR

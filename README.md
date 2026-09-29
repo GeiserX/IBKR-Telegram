@@ -12,7 +12,7 @@
   <a href="https://app.codecov.io/gh/GeiserX/IBKR-Telegram"><img src="https://img.shields.io/codecov/c/github/GeiserX/IBKR-Telegram?style=flat-square&logo=codecov&logoColor=white" alt="Codecov"></a>
 </p>
 
-<p align="center">Self-hosted Telegram bot for Interactive Brokers. Manage your portfolio, execute trades, and monitor positions — all from Telegram.</p>
+<p align="center">Self-hosted Telegram bot for Interactive Brokers, run with Docker Compose next to IB Gateway. Manage your portfolio, execute trades and monitor positions from Telegram.</p>
 
 ## Disclaimer
 
@@ -33,21 +33,23 @@ This software is provided "as is" under the [GPL-3.0 license](https://github.com
 You need an IBKR account with API access, a bot token from [@BotFather](https://t.me/BotFather), and Docker Compose.
 
 ```bash
+git clone https://github.com/GeiserX/IBKR-Telegram.git && cd IBKR-Telegram
 cp .env.example .env && cp config.example.yaml config.yaml && cp docker-compose.example.yml docker-compose.yml
 docker compose up -d
 ```
 
-Fill in `.env` and `config.yaml` before starting, complete the IB Gateway 2FA on first start, then send `/status` to the bot. The [installation guide](https://github.com/GeiserX/IBKR-Telegram/blob/main/docs/installation.md) has every step.
+Fill in `.env` and `config.yaml` before starting, complete the IB Gateway 2FA on first start, then send `/status` to the bot. [Getting started](https://github.com/GeiserX/IBKR-Telegram/blob/main/docs/getting-started.md) has every step.
 
 ## Documentation
 
-- [Installation](https://github.com/GeiserX/IBKR-Telegram/blob/main/docs/installation.md): prerequisites and first start
-- [Commands](https://github.com/GeiserX/IBKR-Telegram/blob/main/docs/commands.md): every Telegram command
+- [Getting started](https://github.com/GeiserX/IBKR-Telegram/blob/main/docs/getting-started.md): prerequisites and first start
 - [Configuration](https://github.com/GeiserX/IBKR-Telegram/blob/main/docs/configuration.md): `config.yaml`, environment variables, margin modes, IB Gateway
+- [Usage](https://github.com/GeiserX/IBKR-Telegram/blob/main/docs/usage.md): every Telegram command
 - [Webhook API](https://github.com/GeiserX/IBKR-Telegram/blob/main/docs/webhook.md): sending trade signals over HTTP
-- [Architecture](https://github.com/GeiserX/IBKR-Telegram/blob/main/docs/architecture.md): how the pieces fit
+- [How it works](https://github.com/GeiserX/IBKR-Telegram/blob/main/docs/how-it-works.md): how the pieces fit
+- [Troubleshooting](https://github.com/GeiserX/IBKR-Telegram/blob/main/docs/troubleshooting.md)
 - [Development](https://github.com/GeiserX/IBKR-Telegram/blob/main/docs/development.md): tests, linting and contributing
 
 ## License
 
-[GPL-3.0](https://github.com/GeiserX/IBKR-Telegram/blob/main/LICENSE)
+[GPL-3.0-or-later](https://github.com/GeiserX/IBKR-Telegram/blob/main/LICENSE)

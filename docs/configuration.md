@@ -49,4 +49,4 @@ This project uses the [gnzsnz/ib-gateway-docker](https://github.com/gnzsnz/ib-ga
 - **Session persistence**: `SAVE_TWS_SETTINGS=yes` preserves settings across restarts.
 - **API access**: `READ_ONLY_API=no` is required for order execution.
 
-See [`docker-compose.example.yml`](../docker-compose.example.yml) for the full configuration.
+See [`docker-compose.example.yml`](https://github.com/GeiserX/IBKR-Telegram/blob/main/docker-compose.example.yml) for the full configuration.
