@@ -2,7 +2,7 @@
 
 ## The bot does not answer
 
-Cause: the bot only answers the Telegram user in `TELEGRAM_ADMIN_CHAT_ID`, and ignores everyone else without a reply. When the variable is missing or `0`, it answers nobody.
+Cause: the bot only obeys the Telegram user in `TELEGRAM_ADMIN_CHAT_ID`. Commands from anyone else get no reply, and their taps on inline buttons get an "Unauthorized" alert. When the variable is missing or `0`, nobody is the admin.
 
 Fix: set `TELEGRAM_ADMIN_CHAT_ID` in `.env` to your numeric Telegram user id and recreate the container.
 
