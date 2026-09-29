@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="banners/banner.svg" alt="IBKR-Telegram" width="100%">
+  <img src="https://raw.githubusercontent.com/GeiserX/IBKR-Telegram/main/docs/images/banner.svg" alt="IBKR-Telegram" width="100%">
 </p>
 
 <h1 align="center">IBKR-Telegram</h1>
