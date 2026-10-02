@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "ibkr",
+  "project_id": "c661baa0-c963-4d0c-ab90-b73c89d9725c"
+}
