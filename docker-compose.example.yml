@@ -19,7 +19,7 @@ services:
       - trading
 
   ibkr-telegram:
-    image: drumsergio/ibkr-telegram:0.1.30
+    image: drumsergio/ibkr-telegram:0.1.31
     container_name: ibkr-telegram
     restart: unless-stopped
     environment:
